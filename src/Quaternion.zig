@@ -182,11 +182,11 @@ pub const Versor = struct {
             .j = a_scaled.j + b_scaled.j,
             .k = a_scaled.k + b_scaled.k,
         }) catch {
-            std.debug.print("a: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{a.quaternion.h, a.quaternion.i, a.quaternion.j, a.quaternion.k});
-            std.debug.print("b: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{b.quaternion.h, b.quaternion.i, b.quaternion.j, b.quaternion.k});
-            std.debug.print("a_scaled: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{a_scaled.h, a_scaled.i, a_scaled.j, a_scaled.k});
-            std.debug.print("b_scaled: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{b_scaled.h, b_scaled.i, b_scaled.j, b_scaled.k});
-            std.debug.print("cos_theta: {d}; theta: {d}; sin_theta: {d}\n", .{cos_theta, theta, sin_theta});
+            std.debug.print("a: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{ a.quaternion.h, a.quaternion.i, a.quaternion.j, a.quaternion.k });
+            std.debug.print("b: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{ b.quaternion.h, b.quaternion.i, b.quaternion.j, b.quaternion.k });
+            std.debug.print("a_scaled: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{ a_scaled.h, a_scaled.i, a_scaled.j, a_scaled.k });
+            std.debug.print("b_scaled: {d:.4} {d:.4} {d:.4} {d:.4}\n", .{ b_scaled.h, b_scaled.i, b_scaled.j, b_scaled.k });
+            std.debug.print("cos_theta: {d}; theta: {d}; sin_theta: {d}\n", .{ cos_theta, theta, sin_theta });
             unreachable;
         };
     }

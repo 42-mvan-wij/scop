@@ -29,7 +29,6 @@ const lib = @import("scop_lib");
 const zgl = @import("zgl");
 const glfw = @import("glfw");
 const zigimg = @import("zigimg");
-const root = @This();
 
 // imported types
 const Matrix4 = @import("./Matrix4.zig");
@@ -151,7 +150,7 @@ const ScopShader = struct {
             // const info_log_length = zgl.getShader(vertex, .info_log_length);
             const log = zgl.getShaderInfoLog(vertex, std.heap.page_allocator) catch unreachable;
             defer std.heap.page_allocator.free(log);
-            std.log.err("Error compiling vertex shader: {s}\n", .{log});
+            std.log.err("Error compiling vertex shader: {s}", .{log});
             return error.VertexShaderError;
         }
 
@@ -164,7 +163,7 @@ const ScopShader = struct {
             // const info_log_length = zgl.getShader(fragment, .info_log_length);
             const log = zgl.getShaderInfoLog(fragment, std.heap.page_allocator) catch unreachable;
             defer std.heap.page_allocator.free(log);
-            std.log.err("Error compiling fragment shader: {s}\n", .{log});
+            std.log.err("Error compiling fragment shader: {s}", .{log});
             return error.FragmentShaderError;
         }
 
@@ -178,7 +177,7 @@ const ScopShader = struct {
             // const info_log_length = zgl.getProgram(program, .info_log_length);
             const log = zgl.getProgramInfoLog(program, std.heap.page_allocator) catch unreachable;
             defer std.heap.page_allocator.free(log);
-            std.log.err("Error compiling shader program: {s}\n", .{log});
+            std.log.err("Error compiling shader program: {s}", .{log});
             return error.ShaderProgramError;
         }
 
@@ -243,9 +242,9 @@ const Transform = struct {
     }
 
     pub fn translateLocal(self: *Transform, x: f32, y: f32, z: f32) void {
-        const right = self.orientation.rotateVector(&.{1, 0, 0});
-        const up = self.orientation.rotateVector(&.{0, 1, 0});
-        const forward = self.orientation.rotateVector(&.{0, 0, -1});
+        const right = self.orientation.rotateVector(&.{ 1, 0, 0 });
+        const up = self.orientation.rotateVector(&.{ 0, 1, 0 });
+        const forward = self.orientation.rotateVector(&.{ 0, 0, -1 });
 
         self.position[0] += right[0] * x + up[0] * y + forward[0] * z;
         self.position[1] += right[1] * x + up[1] * y + forward[1] * z;
@@ -272,6 +271,7 @@ const Scopject = struct {
     pub const RecenterStrategy = enum {
         none,
         bounding_box,
+        surface_area,
     };
 
     fn loadWavefrontFromFile(path: []const u8, allocator: std.mem.Allocator, recenter: RecenterStrategy) !lib.wavefront.WavefrontOpengl {
@@ -303,6 +303,52 @@ const Scopject = struct {
                 const x_center = (x_least + x_most) / 2;
                 const y_center = (y_least + y_most) / 2;
                 const z_center = (z_least + z_most) / 2;
+
+                for (mesh.vertices) |*vertex| {
+                    vertex[0] -= x_center;
+                    vertex[1] -= y_center;
+                    vertex[2] -= z_center;
+                }
+            },
+            .surface_area => {
+                if (mesh.vertex_indices.len == 0) break :recenter;
+
+                var total_double_weight: f32 = 0;
+                var x_center: f32 = 0;
+                var y_center: f32 = 0;
+                var z_center: f32 = 0;
+
+                for (0..mesh.vertex_indices.len / 3) |vi| {
+                    const v0 = mesh.vertices[mesh.vertex_indices[vi + 0]];
+                    const v1 = mesh.vertices[mesh.vertex_indices[vi + 1]];
+                    const v2 = mesh.vertices[mesh.vertex_indices[vi + 2]];
+
+                    const v_center = .{
+                        (v0[0] + v1[0] + v2[0]) / 3.0,
+                        (v0[1] + v1[1] + v2[1]) / 3.0,
+                        (v0[2] + v1[2] + v2[2]) / 3.0,
+                    };
+
+                    const d1 = .{ v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2] };
+                    const d2 = .{ v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2] };
+
+                    const x = d1[1] * d2[2] - d2[1] * d1[2];
+                    const y = d1[2] * d2[0] - d2[2] * d1[0];
+                    const z = d1[0] * d2[1] - d2[0] * d1[1];
+
+                    const double_weight = std.math.sqrt(x * x + y * y + z * z);
+
+                    const new_total_double_weight = total_double_weight + double_weight;
+
+                    const old_part_fraction = total_double_weight / new_total_double_weight;
+                    const new_part_fraction = double_weight / new_total_double_weight;
+
+                    total_double_weight = new_total_double_weight;
+
+                    x_center = x_center * old_part_fraction + v_center[0] * new_part_fraction;
+                    y_center = y_center * old_part_fraction + v_center[1] * new_part_fraction;
+                    z_center = z_center * old_part_fraction + v_center[2] * new_part_fraction;
+                }
 
                 for (mesh.vertices) |*vertex| {
                     vertex[0] -= x_center;
@@ -359,7 +405,12 @@ const Scopject = struct {
             zgl.vertexAttribPointer(vpos, 3, .float, false, @sizeOf(lib.wavefront.WavefrontOpengl.Vertex), 0);
             zgl.enableVertexAttribArray(vpos);
         }
-        zgl.bindVertexArray(.invalid); // NOTE: Unbind curent vertex array as to not accidentally overwrite settings
+        switch (@import("builtin").mode) {
+            .ReleaseFast, .ReleaseSmall => {},
+            .Debug, .ReleaseSafe => {
+                zgl.bindVertexArray(.invalid); // NOTE: Unbind curent vertex array as to not accidentally overwrite settings
+            },
+        }
     }
 
     pub fn draw(self: Scopject, data: *ScopData, shader: *const ScopShader) void {
@@ -380,7 +431,12 @@ const Scopject = struct {
 
         self.vertex_array.bind();
         zgl.drawElements(.triangles, self.triangle_count, .unsigned_int, 0);
-        zgl.bindVertexArray(.invalid); // NOTE: Unbind curent vertex array as to not accidentally overwrite settings
+        switch (@import("builtin").mode) {
+            .ReleaseFast, .ReleaseSmall => {},
+            .Debug, .ReleaseSafe => {
+                zgl.bindVertexArray(.invalid); // NOTE: Unbind curent vertex array as to not accidentally overwrite settings
+            },
+        }
     }
 };
 
@@ -409,8 +465,8 @@ const ScopImageThing = struct {
                 self.start.position[1] * (1.0 - smooth_t) + self.end.position[1] * smooth_t,
                 self.start.position[2] * (1.0 - smooth_t) + self.end.position[2] * smooth_t,
             };
-            const up = self.current.orientation.rotateVector(&.{ 0, 1, 0});
-            const right = self.current.orientation.rotateVector(&.{ 1, 0, 0});
+            const up = self.current.orientation.rotateVector(&.{ 0, 1, 0 });
+            const right = self.current.orientation.rotateVector(&.{ 1, 0, 0 });
             zgl.uniform3f(shader.uniforms.image_up, up[0], up[1], up[2]);
             zgl.uniform3f(shader.uniforms.image_right, right[0], right[1], right[2]);
             zgl.uniform3f(shader.uniforms.image_origin, self.current.position[0], self.current.position[1], self.current.position[2]);
@@ -446,13 +502,13 @@ pub fn main() !u8 {
     var argIterator = std.process.args();
     defer argIterator.deinit();
     const args = Arguments.init(&argIterator) catch {
-        std.log.err("usage: scop <obj file>\n", .{});
+        std.log.err("usage: scop <obj file>", .{});
         return 1;
     };
 
     const S = struct {
         pub fn glfwErrorCallback(err: glfw.Error, description: [:0]const u8) void {
-            std.debug.panic("GLFW Error [{}]: {s}\n", .{ err, description });
+            std.debug.panic("GLFW Error [{}]: {s}", .{ err, description });
         }
 
         pub fn getProcAddress(_: void, proc_name: [:0]const u8) *const anyopaque {
@@ -462,13 +518,13 @@ pub fn main() !u8 {
 
     glfw.setErrorCallback(S.glfwErrorCallback);
     if (!glfw.init()) {
-        std.log.err("Failed to initialize GLFW\n", .{});
+        std.log.err("Failed to initialize GLFW", .{});
         return 1;
     }
     defer glfw.terminate();
 
     var window = glfw.Window.create(initial_width, initial_height, title, null, null, .{}) orelse {
-        std.log.err("Failed to initialize GLFW\n", .{});
+        std.log.err("Failed to create window", .{});
         return 1;
     };
     defer window.destroy();
@@ -610,7 +666,7 @@ fn movement(window: glfw.Window, data: *ScopData, delta_cursor: *const [2]f64, d
         forward -= @floatCast(walk_speed * delta_time);
     }
     if (forward != 0) {
-        var forward_v = data.camera.orientation.rotateVector(&.{0, 0, -1});
+        var forward_v = data.camera.orientation.rotateVector(&.{ 0, 0, -1 });
         forward_v[1] = 0; // No y movement
         const mag2 = forward_v[0] * forward_v[0] + forward_v[1] * forward_v[1] + forward_v[2] * forward_v[2];
         const mag = if (mag2 == 0) 1 else std.math.sqrt(mag2);
@@ -627,7 +683,7 @@ fn movement(window: glfw.Window, data: *ScopData, delta_cursor: *const [2]f64, d
         right += @floatCast(walk_speed * delta_time);
     }
     if (right != 0) {
-        var right_v = data.camera.orientation.rotateVector(&.{1, 0, 0});
+        var right_v = data.camera.orientation.rotateVector(&.{ 1, 0, 0 });
         right_v[1] = 0; // No y movement
         const mag2 = right_v[0] * right_v[0] + right_v[1] * right_v[1] + right_v[2] * right_v[2];
         const mag = if (mag2 == 0) 1 else std.math.sqrt(mag2);
