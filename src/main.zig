@@ -17,8 +17,10 @@ const _ = .{
     ScopData,
 
     smoothstep,
-    getDeltaTime,
-    getDeltaCursor,
+    resetDeltaTime,
+    getResetDeltaTime,
+    resetCursorPos,
+    getResetDeltaCursor,
     uploadImgFromPath,
     uploadImg,
 };
@@ -56,19 +58,31 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) f32 {
     return xx * xx * (3.0 - 2.0 * xx);
 }
 
-fn getDeltaTime() f64 {
-    const delta_time = glfw.getTime();
+fn resetDeltaTime() void {
     glfw.setTime(0);
+}
+
+fn getResetDeltaTime() f64 {
+    const delta_time = glfw.getTime();
+    resetDeltaTime();
     return delta_time;
 }
 
-fn getDeltaCursor(window: glfw.Window) [2]f64 {
-    const cursor_pos = window.getCursorPos();
+const cursor_reset_pos_pct = .{ 0.5, 0.5 };
+
+fn resetCursorPos(window: glfw.Window) [2]f64 {
     const width, const height = window.getFrameBufferSize();
     const width_f: f64 = @floatFromInt(width);
     const height_f: f64 = @floatFromInt(height);
-    window.setCursorPos(width_f / 2.0, height_f / 2.0);
-    return .{ cursor_pos[0] - width_f / 2.0, cursor_pos[1] - height_f / 2.0 };
+    const reset_pos = .{ width_f * cursor_reset_pos_pct[0], height_f * cursor_reset_pos_pct[1] };
+    window.setCursorPos(reset_pos[0], reset_pos[1]);
+    return reset_pos;
+}
+
+fn getResetDeltaCursor(window: glfw.Window) [2]f64 {
+    const cursor_pos = window.getCursorPos();
+    const reset_pos = resetCursorPos(window);
+    return .{ cursor_pos[0] - reset_pos[0], cursor_pos[1] - reset_pos[1] };
 }
 
 fn uploadImgFromPath(path: []const u8, allocator: std.mem.Allocator) !zgl.Texture {
@@ -581,13 +595,13 @@ fn scop(args: Arguments, window: glfw.Window) !void {
 
     zgl.uniform1i(data.shader.uniforms.texture, texture_index);
 
-    _ = getDeltaTime(); // Reset timer
-    _ = getDeltaCursor(window); // Reset cursor position
+    resetDeltaTime();
+    _ = resetCursorPos();
     var frame: usize = 0;
     while (!window.shouldClose()) : (frame += 1) { // NOTE: Theoretically `frame` could overflow
-        const delta_time = getDeltaTime();
-        if (frame == 1) _ = getDeltaCursor(window); // NOTE: This is a workaround to the cursor suddenly getting moved back on the second frame to where it was before the first frame
-        const delta_cursor: [2]f64 = if (data.paused) .{ 0, 0 } else getDeltaCursor(window);
+        const delta_time = getResetDeltaTime();
+        if (frame == 1) _ = resetCursorPos(window); // NOTE: This is a workaround to the cursor suddenly getting moved back on the second frame to where it was before the first frame
+        const delta_cursor: [2]f64 = if (data.paused) .{ 0, 0 } else getResetDeltaCursor(window);
 
         if (!data.paused) {
             movement(window, &data, &delta_cursor, delta_time);
@@ -619,7 +633,7 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: c_int, action: glfw
             if (data.paused) {
                 window.setInputMode(.{ .cursor = .normal });
             } else {
-                _ = getDeltaCursor(window); // Reset cursor position
+                _ = resetCursorPos();
                 window.setInputMode(.{ .cursor = .disabled });
             }
         }
