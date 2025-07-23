@@ -15,19 +15,18 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const glfw_lib_mod = b.createModule(.{
-        // `root_source_file` is the Zig "entry point" of the module. If a module
-        // only contains e.g. external object files, you can make this `null`.
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/glfw.zig"),
+    const zgl = b.dependency("zgl", .{ .target = target, .optimize = optimize });
+    const sdl = b.dependency("sdl", .{ .target = target, .optimize = optimize });
+    const sdl_lib = sdl.artifact("SDL3");
+    // const sdl_test_lib = sdl.artifact("SDL3_test");
+    const zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
+
+    const sdl_lib_mod = b.createModule(.{
+        .root_source_file = b.path("src/sdl/root.zig"),
         .target = target,
         .optimize = optimize,
     });
-    glfw_lib_mod.linkSystemLibrary("glfw3", .{ .needed = true });
-
-    const zgl = b.dependency("zgl", .{ .target = target, .optimize = optimize });
-    const zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
+    sdl_lib_mod.linkLibrary(sdl_lib);
 
     // This creates a "module", which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
@@ -41,7 +40,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    lib_mod.addImport("glfw", glfw_lib_mod);
+    lib_mod.addImport("sdl", sdl_lib_mod);
     lib_mod.addImport("zigimg", zigimg.module("zigimg"));
     lib_mod.addImport("zgl", zgl.module("zgl"));
 
@@ -55,7 +54,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe_mod.addImport("glfw", glfw_lib_mod);
+    exe_mod.addImport("sdl", sdl_lib_mod);
     exe_mod.addImport("zigimg", zigimg.module("zigimg"));
     exe_mod.addImport("zgl", zgl.module("zgl"));
 
