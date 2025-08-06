@@ -4,10 +4,10 @@ const c = @cImport({
 
 const std = @import("std");
 
-const key = @import("./glfw/key.zig");
+const key = @import("./key.zig");
 
 pub const binding = c;
-pub const Window = @import("./glfw/Window.zig");
+pub const Window = @import("./Window.zig");
 pub const Key = key.Key;
 pub const Action = key.Action;
 pub const Mods = key.Mods;
